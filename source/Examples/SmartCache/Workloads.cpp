@@ -52,12 +52,20 @@ uint64_t LFUFriendlyWorkload(SmartCacheImpl<int32_t, int32_t>& smartCache, int32
         }
     }
 
+    int32_t accessedOnce = cacheSize;
+    GetPut(smartCache, accessedOnce);
+
+    accessedOnce++;
     for(int32_t i=0; i < patternRep; i++)
     {
-        for(int32_t j=0; j < cacheSize - 1; j++)
+        for(int32_t j=1; j < cacheSize; j++)
         {
-            GetPut(smartCache, cacheSize + j);
-            GetPut(smartCache, j + 1);
+            GetPut(smartCache, j);
+            for(int32_t k=0; k < cacheSize; k++)
+            {
+                GetPut(smartCache, accessedOnce);
+                accessedOnce++;
+            }
         }
     }
 
