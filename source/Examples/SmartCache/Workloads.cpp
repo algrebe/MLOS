@@ -30,3 +30,28 @@ uint64_t CyclicalWorkload(uint64_t sequenceNumber, SmartCacheImpl<int32_t, int32
 
     return 1;
 }
+
+uint64_t ElevatorWorkload(uint64_t sequenceNumber, SmartCacheImpl<int32_t, int32_t>& smartCache)
+{
+    int32_t i = 1;
+    
+    for (; i < sequenceNumber; i++)
+    {
+        int32_t* element = smartCache.Get(i);
+        if (element == nullptr)
+        {
+            smartCache.Push(i, i);
+        }
+    }
+
+    for (; i >= 1; i--)
+    {
+        int32_t* element = smartCache.Get(i);
+        if (element == nullptr)
+        {
+            smartCache.Push(i, i);
+        }
+    }
+
+    return 1;
+}
