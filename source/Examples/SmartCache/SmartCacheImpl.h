@@ -166,6 +166,7 @@ inline void SmartCacheImpl<TKey, TValue>::Reconfigure()
     // Clear the cache.
     //
     m_elementSequence.clear();
+    m_heap.clear();
     m_lookupTable.clear();
 
     // Adjust the number of buckets reserved for the cache (relative to the
