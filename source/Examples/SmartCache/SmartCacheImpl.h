@@ -57,6 +57,8 @@ public:
     TValue* Get_LFU(TKey key);
     TValue* Get_LRUMRU(TKey key);
     void Push(TKey key, const TValue value);
+    void Push_LFU(TKey key, const TValue value);
+    void Push_LRUMRU(TKey key, const TValue value);
 
     void Reconfigure();
 };
@@ -151,7 +153,61 @@ inline TValue* SmartCacheImpl<TKey, TValue>::Get_LFU(TKey key)
 }
 
 template<typename TKey, typename TValue>
-inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
+inline void SmartCacheImpl<TKey, TValue>::Push_LRUMRU(TKey key, const TValue value)
+{
+    // Find the element ref in the lookup table.
+    //
+    auto lookupItr = m_lookupTable.find(key);
+
+    if (lookupItr == m_lookupTable.end())
+    {
+        if (m_elementSequence.size() == m_cacheSize)
+        {
+            // We reached the maximum cache size, evict the element based on the current policy.
+            //
+            if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::LeastRecentlyUsed)
+            {
+                auto evictedLookupItr = m_elementSequence.back();
+                m_elementSequence.pop_back();
+                m_lookupTable.erase(evictedLookupItr);
+            }
+            else if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::MostRecentlyUsed)
+            {
+                auto evictedLookupItr = m_elementSequence.front();
+                m_elementSequence.pop_front();
+                m_lookupTable.erase(evictedLookupItr);
+            }
+            else
+            {
+                // Unknown policy.
+                //
+                throw std::exception();
+            }
+        }
+
+        m_elementSequence.emplace_front(value);
+        auto elementItr = m_elementSequence.begin();
+
+        m_lookupTable.emplace(key, elementItr);
+    }
+    else
+    {
+        // Enqueue new element to the beginning of the queue.
+        //
+        m_elementSequence.emplace_front(value);
+        m_elementSequence.erase(lookupItr->second);
+
+        // Update existing lookup.
+        //
+        lookupItr->second = m_elementSequence.begin();
+    }
+
+    return;
+
+}
+
+template<typename TKey, typename TValue>
+inline void SmartCacheImpl<TKey, TValue>::Push_LFU(TKey key, const TValue value)
 {
     // Find the element ref in the lookup table.
     //
@@ -192,6 +248,28 @@ inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
     }
 
     return;
+
+}
+
+template<typename TKey, typename TValue>
+inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
+{
+
+    auto policy = m_config.EvictionPolicy;
+
+    if (policy == SmartCache::CacheEvictionPolicy::CacheEvictionPolicy.LeastFrequentlyUsed)
+    {
+        Push_LFU(key, value);
+    }
+    else if (policy == SmartCache::CacheEvictionPolicy::CacheEvictionPolicy.LeastRecentlyUsed || 
+                policy == SmartCache::CacheEvictionPolicy::CacheEvictionPolicy.MostRecentlyUsed)
+    {
+        Push_LRUMRU(key, value);
+    }
+    else
+    {
+        throw std::exception();
+    }    
 }
 
 template<typename TKey, typename TValue>
