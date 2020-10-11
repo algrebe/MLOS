@@ -16,14 +16,25 @@
 #pragma once
 
 template<typename TKey, typename TValue>
+struct Item_{
+    int priority;
+    TKey key;
+    TValue val;
+    
+    Item_(int p, TKey k, TValue v){
+        priority = p;
+        key = k;
+        val = v;
+    }
+    
+};
+
+template<typename TKey, typename TValue>
 class SmartCacheImpl
 {
 
-    struct Item{
-        int priority;
-        TValue val;
-    };
-
+    typedef Item_<TKey, TValue> Item;
+    
 private:
     int m_cacheSize;
 
@@ -110,18 +121,25 @@ inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
 
     if (lookupItr == m_lookupTable.end())
     {
-        if (m_elementSequence.size() == m_cacheSize)
+        if (m_lookupTable.size() == m_cacheSize)
         {
             std::pop_heap(m_heap.begin(), m_heap.end());
+            
+            Item * old = m_heap.back();
+            
             m_heap.pop_back();
-            Item * old = lookupItr->second;
-            m_lookupTable.erase(lookupItr);
+            
+            std::cout << "[EVICT] (" << old->key << ", " << old->val << ")" << std::endl;
+            
+            m_lookupTable.erase(old->key);
+            
             delete old;
+            
         }
 
-        Item * item = new Item(1, value);
+        Item * item = new Item(1, key, value);
         
-        m_lookupTable.insert(key, item);
+        m_lookupTable.insert({key, item});
         
         m_heap.push_back(item);
         
