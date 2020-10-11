@@ -16,29 +16,24 @@
 #pragma once
 
 template<typename TKey, typename TValue>
-struct Item_{
-    int priority;
-    TKey key;
-    TValue val;
-    
-    Item_(int p, TKey k, TValue v){
-        priority = p;
-        key = k;
-        val = v;
-    }
-    
-};
-
-template<typename TKey, typename TValue>
 class SmartCacheImpl
 {
-
-    typedef Item_<TKey, TValue> Item;
+    struct Item{
+        int priority;
+        TKey key;
+        TValue val;
+        
+        Item(int p, TKey k, TValue v){
+            priority = p;
+            key = k;
+            val = v;
+        }
+    };
     
 private:
     int m_cacheSize;
 
-    std::list<Item> m_elementSequence;
+    std::list<Item *> m_elementSequence;
 
     std::vector<Item *> m_heap;
 
@@ -121,14 +116,9 @@ inline TValue* SmartCacheImpl<TKey, TValue>::Get(TKey key)
 
         // Move the element to the beginning of the queue.
         //
-        m_elementSequence.emplace_front(*lookupItr->second);
-        m_elementSequence.erase(lookupItr->second);
-
-        // As we moved the element, we need to update the element ref.
-        //
-        lookupItr->second = m_elementSequence.begin();
-
-        return &m_elementSequence.front();
+        m_elementSequence.emplace_front(lookupItr->second);
+        m_elementSequence.pop_back();
+        return &(m_elementSequence.front()->val);
     }
     else
     {
@@ -200,14 +190,16 @@ inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
                 if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::LeastRecentlyUsed)
                 {
                     auto evictedLookupItr = m_elementSequence.back();
+                    auto oldkey = evictedLookupItr->key;
                     m_elementSequence.pop_back();
-                    m_lookupTable.erase(evictedLookupItr);
+                    m_lookupTable.erase(oldkey);
                 }
                 else if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::MostRecentlyUsed)
                 {
                     auto evictedLookupItr = m_elementSequence.front();
+                    auto oldkey = evictedLookupItr->key;
                     m_elementSequence.pop_front();
-                    m_lookupTable.erase(evictedLookupItr);
+                    m_lookupTable.erase(oldkey);
                 }
                 else
                 {
@@ -216,22 +208,18 @@ inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
                     throw std::exception();
                 }
             }
+            
+            Item * item = new Item(1, key, value);
+            m_elementSequence.emplace_front(item);
+            // auto elementItr = m_elementSequence.begin();
 
-            m_elementSequence.emplace_front(value);
-            auto elementItr = m_elementSequence.begin();
-
-            m_lookupTable.emplace(key, elementItr);
+            m_lookupTable.emplace(key, item);
         }
         else
         {
-            // Enqueue new element to the beginning of the queue.
-            //
-            m_elementSequence.emplace_front(value);
-            m_elementSequence.erase(lookupItr->second);
-
-            // Update existing lookup.
-            //
-            lookupItr->second = m_elementSequence.begin();
+            // Don't do anything. 
+            // Push the same value won't have any effect.
+            // This is for the sake of performance. 
         }
 
         return;
