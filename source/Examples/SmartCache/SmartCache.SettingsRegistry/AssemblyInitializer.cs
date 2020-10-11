@@ -100,10 +100,11 @@ namespace SmartCache
             //
             Hypergrid cacheSearchSpace = new Hypergrid(
                 name: "smart_cache_config",
-                dimension: new CategoricalDimension("cache_implementation", 
-                        CacheEvictionPolicy.LeastRecentlyUsed, 
-                        CacheEvictionPolicy.MostRecentlyUsed, 
-                        CacheEvictionPolicy.LeastFrequentlyUsed))
+                dimension: new CategoricalDimension(
+                    "cache_implementation",
+                    CacheEvictionPolicy.LeastRecentlyUsed,
+                    CacheEvictionPolicy.MostRecentlyUsed,
+                    CacheEvictionPolicy.LeastFrequentlyUsed))
             .Join(
                 subgrid: new Hypergrid(
                     name: "lru_cache_config",

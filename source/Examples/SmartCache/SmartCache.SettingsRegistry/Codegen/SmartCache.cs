@@ -43,7 +43,7 @@ namespace SmartCache
     {
         LeastRecentlyUsed,
         MostRecentlyUsed,
-        LeastFrequentlyUsed
+        LeastFrequentlyUsed,
     }
 
     /// <summary>
