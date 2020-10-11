@@ -14,23 +14,9 @@
 //*********************************************************************
 
 #include <iostream>
-
 #include "stdafx.h"
 #include "SmartCacheImpl.h"
 #include "Workloads.h"
-uint64_t CyclicalWorkload(uint64_t sequenceNumber, SmartCacheImpl<int32_t, int32_t>& smartCache)
-{
-    for (int32_t i = 1; i < sequenceNumber; i++)
-    {
-        int32_t* element = smartCache.Get(i);
-        if (element == nullptr)
-        {
-            smartCache.Push(i, i);
-        }
-    }
-
-    return 1;
-}
 
 inline void GetPut(SmartCacheImpl<int32_t, int32_t>& smartCache, int32_t i)
 {
@@ -40,6 +26,35 @@ inline void GetPut(SmartCacheImpl<int32_t, int32_t>& smartCache, int32_t i)
         smartCache.Push(i, i);
     }
 }
+
+
+uint64_t CyclicalWorkload(uint64_t sequenceNumber, SmartCacheImpl<int32_t, int32_t>& smartCache)
+{
+    for (int32_t i = 1; i < sequenceNumber; i++)
+    {
+        GetPut(smartCache, i);
+    }
+
+    return 1;
+}
+
+uint64_t ElevatorWorkload(uint64_t sequenceNumber, SmartCacheImpl<int32_t, int32_t>& smartCache)
+{
+    int32_t i = 1;
+    
+    for (; i < sequenceNumber; i++)
+    {
+        GetPut(smartCache, i);
+    }
+
+    for (; i >= 1; i--)
+    {
+        GetPut(smartCache, i);
+    }
+
+    return 1;
+}
+
 
 uint64_t LFUFriendlyWorkload(SmartCacheImpl<int32_t, int32_t>& smartCache, int32_t cacheSize, int freq, int patternRep)
 {
