@@ -129,7 +129,7 @@ inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
             
             m_heap.pop_back();
             
-            std::cout << "[EVICT] (" << old->key << ", " << old->val << ")" << std::endl;
+            // std::cout << "[EVICT] (" << old->key << ", " << old->val << ")" << std::endl;
             
             m_lookupTable.erase(old->key);
             
