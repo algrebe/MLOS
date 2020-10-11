@@ -162,9 +162,10 @@ main(
     {
         std::cout << "observations: " << observations << std::endl;
 
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < 1; i++)
         {
-            CyclicalWorkload(2048, smartCache);
+            /// CyclicalWorkload(2048, smartCache);
+            LFUFriendlyWorkload(smartCache, config.CacheSize, 10, 100);
         }
 
         // After having run a workload for a while, we want to check for a new

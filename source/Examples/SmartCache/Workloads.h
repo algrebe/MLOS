@@ -16,3 +16,4 @@
 #pragma once
 
 uint64_t CyclicalWorkload(uint64_t sequenceNumber, SmartCacheImpl<int32_t, int32_t>& smartCache);
+uint64_t LFUFriendlyWorkload(SmartCacheImpl<int32_t, int32_t>& smartCache, int32_t cacheSize, int freq, int patternRep);
