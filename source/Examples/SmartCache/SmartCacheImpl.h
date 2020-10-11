@@ -54,6 +54,8 @@ public:
 
     bool Contains(TKey key);
     TValue* Get(TKey key);
+    TValue* Get_LFU(TKey key);
+    TValue* Get_LRUMRU(TKey key);
     void Push(TKey key, const TValue value);
 
     void Reconfigure();
@@ -91,6 +93,23 @@ inline bool SmartCacheImpl<TKey, TValue>::Contains(TKey key)
 }
 
 template<typename TKey, typename TValue>
+inline TValue* SmartCacheImpl<TKey, TValue>::Get_LRUMRU(TKey key)
+{
+    auto lookupItr = m_lookupTable.find(key);
+
+    // Move the element to the beginning of the queue.
+    //
+    m_elementSequence.emplace_front(*lookupItr->second);
+    m_elementSequence.erase(lookupItr->second);
+
+    // As we moved the element, we need to update the element ref.
+    //
+    lookupItr->second = m_elementSequence.begin();
+
+    return &m_elementSequence.front();
+}
+
+template<typename TKey, typename TValue>
 inline TValue* SmartCacheImpl<TKey, TValue>::Get(TKey key)
 {
     if (!Contains(key))
@@ -98,17 +117,36 @@ inline TValue* SmartCacheImpl<TKey, TValue>::Get(TKey key)
         return nullptr;
     }
 
-    // Find the element ref in the lookup table.
-    //
+    auto policy = m_config.EvictionPolicy;
+
+    if (policy == SmartCache::CacheEvictionPolicy::CacheEvictionPolicy.LeastFrequentlyUsed)
+    {
+        return Get_LFU(key);
+    }
+    else if (policy == SmartCache::CacheEvictionPolicy::CacheEvictionPolicy.LeastRecentlyUsed || 
+                policy == SmartCache::CacheEvictionPolicy::CacheEvictionPolicy.MostRecentlyUsed)
+    {
+        return Get_LRUMRU(key);
+    }
+    else
+    {
+        throw std::exception();
+    }
+}
+
+template<typename TKey, typename TValue>
+inline TValue* SmartCacheImpl<TKey, TValue>::Get_LFU(TKey key)
+{
     auto lookupItr = m_lookupTable.find(key);
     
+    // Every time we get an element, 
+    // the priority bumped up +1.
+    //
     Item * item = lookupItr->second;
     item->priority += 1;
-    
     std::make_heap(m_heap.begin(), m_heap.end(), [](Item * lhs, Item * rhs){
         return lhs->priority > rhs->priority;
     });
-
     return & item->val;
 }
 
