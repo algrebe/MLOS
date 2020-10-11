@@ -18,12 +18,26 @@
 template<typename TKey, typename TValue>
 class SmartCacheImpl
 {
+    struct Item{
+        int priority;
+        TKey key;
+        TValue val;
+        
+        Item(int p, TKey k, TValue v){
+            priority = p;
+            key = k;
+            val = v;
+        }
+    };
+    
 private:
     int m_cacheSize;
 
-    std::list<TValue> m_elementSequence;
+    std::list<Item *> m_elementSequence;
 
-    std::unordered_map<TKey, typename std::list<TValue>::iterator> m_lookupTable;
+    std::vector<Item *> m_heap;
+
+    std::unordered_map<TKey, Item *> m_lookupTable;
 
     // Mlos Tunable Component Config.
     //
@@ -79,73 +93,141 @@ inline TValue* SmartCacheImpl<TKey, TValue>::Get(TKey key)
         return nullptr;
     }
 
-    // Find the element ref in the lookup table.
-    //
-    auto lookupItr = m_lookupTable.find(key);
+    auto policy = m_config.EvictionPolicy;
 
-    // Move the element to the beginning of the queue.
-    //
-    m_elementSequence.emplace_front(*lookupItr->second);
-    m_elementSequence.erase(lookupItr->second);
+    if (policy == SmartCache::CacheEvictionPolicy::LeastFrequentlyUsed)
+    {
+        auto lookupItr = m_lookupTable.find(key);
+    
+        // Every time we get an element, 
+        // the priority bumped up +1.
+        //
+        Item * item = lookupItr->second;
+        item->priority += 1;
+        std::make_heap(m_heap.begin(), m_heap.end(), [](Item * lhs, Item * rhs){
+            return lhs->priority > rhs->priority;
+        });
+        return & item->val;
+    }
+    else if (policy == SmartCache::CacheEvictionPolicy::LeastRecentlyUsed || 
+                policy == SmartCache::CacheEvictionPolicy::MostRecentlyUsed)
+    {
+        auto lookupItr = m_lookupTable.find(key);
 
-    // As we moved the element, we need to update the element ref.
-    //
-    lookupItr->second = m_elementSequence.begin();
-
-    return &m_elementSequence.front();
+        // Move the element to the beginning of the queue.
+        //
+        m_elementSequence.emplace_front(lookupItr->second);
+        m_elementSequence.pop_back();
+        return &(m_elementSequence.front()->val);
+    }
+    else
+    {
+        throw std::exception();
+    }
 }
 
 template<typename TKey, typename TValue>
 inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
 {
-    // Find the element ref in the lookup table.
-    //
-    auto lookupItr = m_lookupTable.find(key);
 
-    if (lookupItr == m_lookupTable.end())
+    auto policy = m_config.EvictionPolicy;
+
+    if (policy == SmartCache::CacheEvictionPolicy::LeastFrequentlyUsed)
     {
-        if (m_elementSequence.size() == m_cacheSize)
+        // Find the element ref in the lookup table.
+        //
+        auto lookupItr = m_lookupTable.find(key);
+
+        if (lookupItr == m_lookupTable.end())
         {
-            // We reached the maximum cache size, evict the element based on the current policy.
-            //
-            if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::LeastRecentlyUsed)
+            if (m_lookupTable.size() == m_cacheSize)
             {
-                auto evictedLookupItr = m_elementSequence.back();
-                m_elementSequence.pop_back();
-                m_lookupTable.erase(evictedLookupItr);
+                std::pop_heap(m_heap.begin(), m_heap.end());
+                
+                Item * old = m_heap.back();
+                
+                m_heap.pop_back();
+                
+                // std::cout << "[EVICT] (" << old->key << ", " << old->val << ")" << std::endl;
+                
+                m_lookupTable.erase(old->key);
+                
+                delete old;
+                
             }
-            else if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::MostRecentlyUsed)
-            {
-                auto evictedLookupItr = m_elementSequence.front();
-                m_elementSequence.pop_front();
-                m_lookupTable.erase(evictedLookupItr);
-            }
-            else
-            {
-                // Unknown policy.
-                //
-                throw std::exception();
-            }
+
+            Item * item = new Item(1, key, value);
+            
+            m_lookupTable.insert({key, item});
+            
+            m_heap.push_back(item);
+            
+            std::make_heap(m_heap.begin(), m_heap.end(), [](Item * lhs, Item * rhs){
+                return lhs->priority > rhs->priority;
+            });
+
+        }
+        else
+        {
+            // Not do anything because user should have modify the value by using Get().
         }
 
-        m_elementSequence.emplace_front(value);
-        auto elementItr = m_elementSequence.begin();
+        return;
+    }
+    else if (policy == SmartCache::CacheEvictionPolicy::LeastRecentlyUsed || 
+                policy == SmartCache::CacheEvictionPolicy::MostRecentlyUsed)
+    {
+        // Find the element ref in the lookup table.
+    //
+        auto lookupItr = m_lookupTable.find(key);
 
-        m_lookupTable.emplace(key, elementItr);
+        if (lookupItr == m_lookupTable.end())
+        {
+            if (m_elementSequence.size() == m_cacheSize)
+            {
+                // We reached the maximum cache size, evict the element based on the current policy.
+                //
+                if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::LeastRecentlyUsed)
+                {
+                    auto evictedLookupItr = m_elementSequence.back();
+                    auto oldkey = evictedLookupItr->key;
+                    m_elementSequence.pop_back();
+                    m_lookupTable.erase(oldkey);
+                }
+                else if (m_config.EvictionPolicy == SmartCache::CacheEvictionPolicy::MostRecentlyUsed)
+                {
+                    auto evictedLookupItr = m_elementSequence.front();
+                    auto oldkey = evictedLookupItr->key;
+                    m_elementSequence.pop_front();
+                    m_lookupTable.erase(oldkey);
+                }
+                else
+                {
+                    // Unknown policy.
+                    //
+                    throw std::exception();
+                }
+            }
+            
+            Item * item = new Item(1, key, value);
+            m_elementSequence.emplace_front(item);
+            // auto elementItr = m_elementSequence.begin();
+
+            m_lookupTable.emplace(key, item);
+        }
+        else
+        {
+            // Don't do anything. 
+            // Push the same value won't have any effect.
+            // This is for the sake of performance. 
+        }
+
+        return;
     }
     else
     {
-        // Enqueue new element to the beginning of the queue.
-        //
-        m_elementSequence.emplace_front(value);
-        m_elementSequence.erase(lookupItr->second);
-
-        // Update existing lookup.
-        //
-        lookupItr->second = m_elementSequence.begin();
-    }
-
-    return;
+        throw std::exception();
+    }    
 }
 
 template<typename TKey, typename TValue>
@@ -158,6 +240,7 @@ inline void SmartCacheImpl<TKey, TValue>::Reconfigure()
     // Clear the cache.
     //
     m_elementSequence.clear();
+    m_heap.clear();
     m_lookupTable.clear();
 
     // Adjust the number of buckets reserved for the cache (relative to the
