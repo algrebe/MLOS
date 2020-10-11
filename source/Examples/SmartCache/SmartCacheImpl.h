@@ -14,6 +14,7 @@
 //*********************************************************************
 
 #pragma once
+#include <chrono>
 
 template<typename TKey, typename TValue>
 class SmartCacheImpl
@@ -28,6 +29,9 @@ private:
     // Mlos Tunable Component Config.
     //
     Mlos::Core::ComponentConfig<SmartCache::SmartCacheConfig>& m_config;
+
+    TValue* _Get(TKey key);
+    void _Push(TKey key, const TValue value);
 
 public:
     SmartCacheImpl(Mlos::Core::ComponentConfig<SmartCache::SmartCacheConfig>& config);
@@ -60,19 +64,11 @@ template<typename TKey, typename TValue>
 inline bool SmartCacheImpl<TKey, TValue>::Contains(TKey key)
 {
     bool isInCache = m_lookupTable.find(key) != m_lookupTable.end();
-
-    SmartCache::CacheRequestEventMessage msg;
-    msg.ConfigId = m_config.ConfigId;
-    msg.Key = key;
-    msg.IsInCache = isInCache;
-
-    m_config.SendTelemetryMessage(msg);
-
     return isInCache;
 }
 
 template<typename TKey, typename TValue>
-inline TValue* SmartCacheImpl<TKey, TValue>::Get(TKey key)
+inline TValue* SmartCacheImpl<TKey, TValue>::_Get(TKey key)
 {
     if (!Contains(key))
     {
@@ -96,7 +92,14 @@ inline TValue* SmartCacheImpl<TKey, TValue>::Get(TKey key)
 }
 
 template<typename TKey, typename TValue>
-inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
+inline TValue* SmartCacheImpl<TKey, TValue>::Get(TKey key)
+{
+    auto val = _Get(key);
+    return val;
+}
+
+template<typename TKey, typename TValue>
+inline void SmartCacheImpl<TKey, TValue>::_Push(TKey key, const TValue value)
 {
     // Find the element ref in the lookup table.
     //
@@ -146,6 +149,20 @@ inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
     }
 
     return;
+}
+
+template<typename TKey, typename TValue>
+inline void SmartCacheImpl<TKey, TValue>::Push(TKey key, const TValue value)
+{
+    auto start = std::chrono::high_resolution_clock::now();
+    _Push(key, value);
+    auto end = std::chrono::high_resolution_clock::now();
+    long elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+
+    SmartCache::PushLatencyEventMessage msg;
+    msg.ConfigId = m_config.ConfigId;
+    msg.PushLatencyNS = elapsed_ns;
+    m_config.SendTelemetryMessage(msg);
 }
 
 template<typename TKey, typename TValue>

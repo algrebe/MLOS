@@ -49,6 +49,16 @@ namespace SmartCache
         private static int totalRequestCount = 0;
 
         /// <summary>
+        /// Cumulative sum of push latencies observed.
+        /// </summary>
+        private static long pushLatencyNSTotal = 0;
+
+        /// <summary>
+        /// Count of push latency messages (required to calculate average).
+        /// </summary>
+        private static int pushLatencyMessageCount = 0;
+
+        /// <summary>
         /// A local reference to the connection to the optimizer service.
         /// </summary>
         private static readonly IOptimizerProxy OptimizerProxy;
@@ -87,6 +97,7 @@ namespace SmartCache
             //
             SmartCacheProxy.CacheRequestEventMessage.Callback = CacheRequestEventMessageHandler;
             SmartCacheProxy.RequestNewConfigurationMessage.Callback = RequestNewConfigurationMessageHandler;
+            SmartCacheProxy.PushLatencyEventMessage.Callback = PushLatencyEventMessageHandler;
 
             // Create smart cache parameter search space.
             //
@@ -126,7 +137,7 @@ namespace SmartCache
                 ContextSpace = null,
                 ObjectiveSpace = new Hypergrid(
                     name: "objectives",
-                    dimensions: new ContinuousDimension(name: "HitRate", min: 0.0, max: 1.0)),
+                    dimensions: new ContinuousDimension(name: "PushLatency", min: 0.0, max: 6000.0)),
             };
 
             // Define optimization objective.
@@ -136,8 +147,8 @@ namespace SmartCache
                 {
                     // Tell the optimizer that we want to maximize hit rate.
                     //
-                    Name = "HitRate",
-                    Minimize = false,
+                    Name = "PushLatency",
+                    Minimize = true, // We will be setting this to true
                 });
 
             // Get a local reference to the optimizer to reuse when processing messages later on.
@@ -165,6 +176,12 @@ namespace SmartCache
             ++totalRequestCount;
         }
 
+        private static void PushLatencyEventMessageHandler(SmartCacheProxy.PushLatencyEventMessage msg)
+        {
+            pushLatencyNSTotal += msg.PushLatencyNS;
+            ++pushLatencyMessageCount;
+        }
+
         /// <summary>
         /// Handler for a RequestNewConfigurationMessage from the smart componet.
         /// Receipt of such a message is used as a signal to request a new
@@ -184,12 +201,16 @@ namespace SmartCache
             //
             if (OptimizerProxy != null)
             {
-                if (totalRequestCount != 0)
+                if (pushLatencyMessageCount != 0)
                 {
-                    double hitRate = (double)isInCacheCount / (double)totalRequestCount;
+                    double avgLatency = (double)pushLatencyNSTotal / (double)pushLatencyMessageCount;
+                    if (avgLatency > 6000)
+                    {
+                        throw new NotSupportedException();
+                    }
 
-                    isInCacheCount = 0;
-                    totalRequestCount = 0;
+                    pushLatencyNSTotal = 0;
+                    pushLatencyMessageCount = 0;
 
                     // Let's assemble an observation message that consists of
                     // the config and the resulting performance.
@@ -210,7 +231,7 @@ namespace SmartCache
                     //
                     Console.WriteLine("Register an observation");
 
-                    OptimizerProxy.Register(currentConfigJsonString, "HitRate", hitRate);
+                    OptimizerProxy.Register(currentConfigJsonString, "PushLatency", avgLatency);
                 }
 
                 // Now, ask the optimizer for a new configuration suggestion.

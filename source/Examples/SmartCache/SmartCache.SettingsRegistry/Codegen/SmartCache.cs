@@ -81,6 +81,16 @@ namespace SmartCache
         internal bool IsInCache;
     }
 
+    [CodegenMessage]
+    internal partial struct PushLatencyEventMessage
+    {
+        [ScalarSetting]
+        internal long ConfigId;
+
+        [ScalarSetting]
+        internal long PushLatencyNS;
+    }
+
     /// <summary>
     /// A message to ask optimizer for the new configuration.
     /// </summary>

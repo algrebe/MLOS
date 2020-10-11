@@ -158,7 +158,7 @@ main(
 
     // Now we run a workload to exercise the SmartCache.
     //
-    for (int observations = 0; observations < 100; observations++)
+    for (int observations = 0; observations < 500; observations++)
     {
         std::cout << "observations: " << observations << std::endl;
 
